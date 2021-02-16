@@ -1,0 +1,92 @@
+version: '3'
+services:
+
+  #PHP Service
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        PHP_FPM_VERSION: ${PHP_FPM_VERSION}
+    image: digitalocean.com/php
+    container_name: "app_${SERVICE_NAME}_${SERVICE_ENV}"
+    restart: unless-stopped
+    tty: true
+    env_file:
+      - docker-compose.env
+    environment:
+      SERVICE_NAME: ${SERVICE_NAME}
+      SERVICE_TAGS: ${SERVICE_TAGS}
+    working_dir: /var/www
+    volumes:
+      - ./:/var/www
+      - ./docker/php/local.ini:/usr/local/etc/php/conf.d/local.ini
+    networks:
+      - app-network
+
+  #Nginx Service
+  webserver:
+    image: nginx:alpine
+    container_name: "webserver_${SERVICE_NAME}_${SERVICE_ENV}"
+    restart: unless-stopped
+    tty: true
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./:/var/www
+      - ./docker/nginx/conf.d/:/etc/nginx/conf.d/
+    networks:
+      - app-network
+
+  #MySQL Service
+  db:
+    image: "mysql:${MYSQL_VERSION}"
+    container_name: "db_${SERVICE_NAME}_${SERVICE_ENV}"
+    restart: unless-stopped
+    tty: true
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      SERVICE_TAGS: ${MYSQL_SERVICE_TAGS}
+      SERVICE_NAME: ${MYSQL_SERVICE_NAME}
+    volumes:
+      - ./docker/mysql/dbdata:/var/lib/mysql
+      - ./docker/mysql/my.cnf:/etc/mysql/my.cnf
+    networks:
+      - app-network
+
+  # phpmyadmin
+  phpmyadmin:
+    container_name: "phpmyadmin_${SERVICE_NAME}_${SERVICE_ENV}"
+    depends_on:
+      - db
+    image: phpmyadmin/phpmyadmin
+    restart: always
+    ports:
+      - '8080:80'
+    environment:
+      PMA_HOST: ${PMA_HOSTS}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    networks:
+      - app-network
+
+  redis:
+    image: redis
+    container_name: "redis_${SERVICE_NAME}_${SERVICE_ENV}"
+    ports:
+      - 16379:6379
+    volumes:
+      - ./docker/redis:/data
+
+#Docker Networks
+networks:
+  app-network:
+    driver: bridge
+
+#Volumes
+volumes:
+  dbdata:
+    driver: local
